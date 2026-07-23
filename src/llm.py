@@ -13,6 +13,7 @@ import json
 import re
 from typing import Callable, TypeVar
 
+import httpx
 from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
@@ -36,6 +37,12 @@ def make_client(settings: Settings) -> AsyncOpenAI:
     client = AsyncOpenAI(
         base_url=settings.llm.base_url,
         api_key=env("OPENROUTER_API_KEY") or "missing-key",
+        # Without an explicit timeout the SDK waits up to 600s per request (and
+        # silently retries twice) — a wedged provider call would look like a
+        # frozen pipeline. Cap it so hangs fail fast into the visible
+        # with_retry → StageFailure path instead.
+        timeout=httpx.Timeout(settings.llm.request_timeout_sec, connect=10.0),
+        max_retries=1,
         default_headers={
             # OpenRouter attribution headers (optional but recommended)
             "HTTP-Referer": "https://localhost/reels-agent",

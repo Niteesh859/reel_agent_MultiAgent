@@ -17,6 +17,7 @@ models:
 llm:
   base_url: "https://openrouter.ai/api/v1"
   max_output_tokens: 8000
+  request_timeout_sec: 240     # hard cap per LLM call — a wedged call fails visibly instead of hanging
   json_retries: 2              # corrective re-asks when output fails schema validation
   force_json_mode: true        # send response_format={"type":"json_object"}
   require_json_capable_provider: true   # OpenRouter: route only to providers honoring response_format

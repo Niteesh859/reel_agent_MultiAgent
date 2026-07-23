@@ -45,6 +45,16 @@ the second one, the deliverable lands in `output/scripts/` as both `.json`
 Every intermediate artifact — each research attempt, every loop round's command/
 execution/decision — is saved under `output/runs/<reel_id>/` for inspection.
 
+**Timing expectations — it is not stuck.** A full run takes **5–10 minutes** before
+the second checkpoint: research ~1–3 min, then 3–5 script-loop rounds at ~1–2 min
+each (two LLM calls per round; DeepSeek spends extra time on reasoning tokens).
+Every in-flight call prints a dim progress line (`writer drafting… (20-90s)`), so
+silence never lasts more than a moment. If a provider call genuinely wedges, it is
+killed after 240s (`llm.request_timeout_sec`), retried once with a visible
+`[guardrail] … retrying once…` line, and on a second failure the pipeline pauses
+with a red `⏸ pipeline paused` message — so a real hang always resolves itself
+within ~8 minutes. **Don't Ctrl+C while a progress line is showing.**
+
 ## Checkpoint actions (TUI and Telegram, full parity)
 
 | Action | How |

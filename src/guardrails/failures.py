@@ -37,6 +37,11 @@ async def with_retry(
     except (SkipReel, asyncio.CancelledError):
         raise
     except Exception as first_err:  # noqa: BLE001 — infra errors are heterogeneous
+        print(
+            f"[guardrail] stage '{stage}' hit {type(first_err).__name__}: "
+            f"{first_err} — retrying once…",
+            flush=True,
+        )
         await asyncio.sleep(retry_delay_sec)
         try:
             return await fn(*args, **kwargs)

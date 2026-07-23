@@ -34,6 +34,7 @@ class ModelsCfg(BaseModel):
 class LLMCfg(BaseModel):
     base_url: str = "https://openrouter.ai/api/v1"
     max_output_tokens: int = 8000
+    request_timeout_sec: float = Field(default=240.0, gt=0)
     json_retries: int = 2
     force_json_mode: bool = True
     require_json_capable_provider: bool = True

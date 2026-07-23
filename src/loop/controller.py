@@ -97,6 +97,7 @@ class ScriptLoopController:
         rounds: list[dict] = []
         prior_notes: list[str] = []
 
+        self._emit("backbone_start", {"iteration": 1})
         command, final_angle = await with_retry(
             self.strategist.open_backbone,
             brief,

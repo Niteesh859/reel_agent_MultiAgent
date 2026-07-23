@@ -142,7 +142,9 @@ async def _research_stage(
     note: str | None = None
     attempt = 1
     while True:
-        await _notify(channels, f"🔎 researching “{topic}” (attempt {attempt})…")
+        await _notify(
+            channels, f"🔎 researching “{topic}” (attempt {attempt}, ~1-3 min)…"
+        )
         brief: ResearchBrief = await with_retry(
             run_research, client, settings, topic, angle_hint, note, stage="research"
         )
@@ -178,6 +180,11 @@ async def _script_stage(
 
         def on_event(kind: str, payload: dict, _attempt: int = attempt) -> None:
             iteration = payload.get("iteration", 0)
+            if kind == "backbone_start":
+                console.log(
+                    "[dim][loop] strategist designing angle + backbone… (~30-90s)[/dim]"
+                )
+                return
             if kind == "writer_start":
                 console.log(
                     f"[dim][loop] round {iteration}: writer drafting… "
