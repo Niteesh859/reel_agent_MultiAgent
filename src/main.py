@@ -124,6 +124,17 @@ def script_view(script: ConvergedScript, spine: str, reel_id: str) -> Checkpoint
 # ── stages ──────────────────────────────────────────────────────────────────
 
 
+async def _notify(channels, text: str) -> None:
+    """Best-effort fan-out: a channel hiccup must never take the pipeline down."""
+    for ch in channels:
+        try:
+            await ch.notify(text)
+        except Exception as err:  # noqa: BLE001
+            console.print(
+                f"[dim yellow]({ch.name} notify failed: {type(err).__name__} — continuing)[/dim yellow]"
+            )
+
+
 async def _research_stage(
     client, settings: Settings, channels, topic: str, angle_hint: str | None,
     reel_id: str, run_dir: Path,
@@ -131,8 +142,7 @@ async def _research_stage(
     note: str | None = None
     attempt = 1
     while True:
-        for ch in channels:
-            await ch.notify(f"🔎 researching “{topic}” (attempt {attempt})…")
+        await _notify(channels, f"🔎 researching “{topic}” (attempt {attempt})…")
         brief: ResearchBrief = await with_retry(
             run_research, client, settings, topic, angle_hint, note, stage="research"
         )
@@ -160,11 +170,11 @@ async def _script_stage(
     prior: ConvergedScript | None = None
     attempt = 1
     while True:
-        for ch in channels:
-            await ch.notify(
-                f"✍️ script loop running (attempt {attempt}, "
-                f"{settings.loop.min_rounds}-{settings.loop.max_rounds} rounds)…"
-            )
+        await _notify(
+            channels,
+            f"✍️ script loop running (attempt {attempt}, "
+            f"{settings.loop.min_rounds}-{settings.loop.max_rounds} rounds)…",
+        )
 
         def on_event(kind: str, payload: dict, _attempt: int = attempt) -> None:
             iteration = payload.get("iteration", 0)
@@ -265,13 +275,22 @@ async def main_async(argv: list[str] | None = None) -> int:
     if not args.tui_only and telegram_configured():
         from src.io.telegram import TelegramChannel
 
-        channels.append(
-            TelegramChannel(
-                env("TELEGRAM_BOT_TOKEN"),  # type: ignore[arg-type]
-                env("TELEGRAM_CHAT_ID"),  # type: ignore[arg-type]
-                settings.io_cfg.telegram_poll_timeout_sec,
-            )
+        telegram = TelegramChannel(
+            env("TELEGRAM_BOT_TOKEN"),  # type: ignore[arg-type]
+            env("TELEGRAM_CHAT_ID"),  # type: ignore[arg-type]
+            settings.io_cfg.telegram_poll_timeout_sec,
         )
+        try:
+            bot_name = await telegram.verify()
+            channels.append(telegram)
+            console.print(f"[green]Telegram channel connected (@{bot_name}).[/green]")
+        except Exception as err:  # noqa: BLE001 — degrade to TUI-only, never crash
+            await telegram.aclose()
+            console.print(
+                f"[yellow]Telegram configured but not working — continuing TUI-only.\n"
+                f"  reason: {err}\n"
+                f"  hint: open your bot's chat in Telegram, press Start, then re-run.[/yellow]"
+            )
 
     console.print(
         f"[bold]reels-agent · Phase 1[/bold] — reel [cyan]{reel_id}[/cyan]\n"
@@ -289,8 +308,7 @@ async def main_async(argv: list[str] | None = None) -> int:
             f"🎬 script approved & exported\n  JSON: {json_path}\n  MD:   {md_path}\n"
             "Phase 2 (visuals/TTS/render) is not built yet — use the export manually."
         )
-        for ch in channels:
-            await ch.notify(done_msg)
+        await _notify(channels, done_msg)
         return 0
     except SkipReel:
         console.print("[yellow]Reel skipped by operator.[/yellow]")

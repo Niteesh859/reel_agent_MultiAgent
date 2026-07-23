@@ -4,10 +4,17 @@ Zero-argument decisions are inline buttons (Approve / Show full / Skip); typed
 messages carry edits and regenerate-notes using the exact same command syntax
 as the TUI. Replying to a per-scene message (sent by "show full") edits that
 scene directly. Auto-enabled when TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID are set.
+
+Resilience: `verify()` is called once at startup (bad token/chat falls back to
+TUI-only instead of failing mid-run); sends retry once on transport errors; the
+long-poll loop rides out network blips. Telegram-API-level errors (bad token,
+polling conflict) still raise so the checkpoint layer can drop the channel
+visibly rather than retry forever.
 """
 
 from __future__ import annotations
 
+import asyncio
 import re
 
 import httpx
@@ -18,6 +25,7 @@ _MAX_MSG = 3900  # Telegram hard limit is 4096
 _FIELD_PREFIX = re.compile(
     r"^(narration|text|visual|emphasis|duration)\s*[:=]", re.IGNORECASE
 )
+_QUICK_TIMEOUT = httpx.Timeout(8.0, connect=5.0)
 
 
 class TelegramChannel:
@@ -28,17 +36,42 @@ class TelegramChannel:
         self.poll_timeout = poll_timeout_sec
         self._http = httpx.AsyncClient(
             base_url=f"https://api.telegram.org/bot{token}",
-            timeout=httpx.Timeout(poll_timeout_sec + 15, connect=10),
+            timeout=httpx.Timeout(15.0, connect=10.0),
         )
+        self._poll_http_timeout = httpx.Timeout(poll_timeout_sec + 15.0, connect=10.0)
         self._offset: int | None = None
         self._scene_messages: dict[int, int] = {}  # message_id -> scene_id
 
-    async def _api(self, method: str, **params) -> dict:
-        response = await self._http.post(f"/{method}", json=params)
+    async def _api(
+        self, method: str, *, http_timeout: httpx.Timeout | None = None, **params
+    ) -> dict:
+        kwargs: dict = {"json": params}
+        if http_timeout is not None:
+            kwargs["timeout"] = http_timeout
+        response = await self._http.post(f"/{method}", **kwargs)
         payload = response.json()
         if not payload.get("ok"):
             raise RuntimeError(f"telegram {method} failed: {payload.get('description')}")
         return payload["result"]
+
+    async def verify(self) -> str:
+        """Startup probe: confirm the token AND that the bot can reach the chat
+        (the latter fails until the operator has pressed Start on the bot)."""
+        me = await self._api("getMe", http_timeout=_QUICK_TIMEOUT)
+        await self._api(
+            "sendMessage",
+            http_timeout=_QUICK_TIMEOUT,
+            chat_id=self.chat_id,
+            text="🤖 reels-agent checkpoint channel connected",
+        )
+        return me.get("username", "bot")
+
+    async def _post_chunk(self, **params) -> dict:
+        try:
+            return await self._api("sendMessage", **params)
+        except httpx.HTTPError:  # transient transport error — one retry
+            await asyncio.sleep(2.0)
+            return await self._api("sendMessage", **params)
 
     def _chunks(self, text: str) -> list[str]:
         if len(text) <= _MAX_MSG:
@@ -58,8 +91,7 @@ class TelegramChannel:
         message_id = 0
         chunks = self._chunks(text)
         for i, chunk in enumerate(chunks):
-            result = await self._api(
-                "sendMessage",
+            result = await self._post_chunk(
                 chat_id=self.chat_id,
                 text=chunk,
                 disable_web_page_preview=True,
@@ -118,12 +150,17 @@ class TelegramChannel:
 
     async def next_action(self) -> CheckpointAction:
         while True:
-            updates = await self._api(
-                "getUpdates",
-                timeout=self.poll_timeout,
-                allowed_updates=["message", "callback_query"],
-                **({"offset": self._offset} if self._offset is not None else {}),
-            )
+            try:
+                updates = await self._api(
+                    "getUpdates",
+                    http_timeout=self._poll_http_timeout,
+                    timeout=self.poll_timeout,
+                    allowed_updates=["message", "callback_query"],
+                    **({"offset": self._offset} if self._offset is not None else {}),
+                )
+            except httpx.HTTPError:  # network blip — keep the channel alive
+                await asyncio.sleep(3.0)
+                continue
             for update in updates:
                 self._offset = update["update_id"] + 1
                 if callback := update.get("callback_query"):
@@ -131,8 +168,8 @@ class TelegramChannel:
                         await self._api(
                             "answerCallbackQuery", callback_query_id=callback["id"]
                         )
-                    except RuntimeError:
-                        pass  # stale button; the action itself still counts
+                    except (RuntimeError, httpx.HTTPError):
+                        pass  # cosmetic ack; the action itself still counts
                     if str(callback.get("message", {}).get("chat", {}).get("id")) != self.chat_id:
                         continue
                     data = callback.get("data")

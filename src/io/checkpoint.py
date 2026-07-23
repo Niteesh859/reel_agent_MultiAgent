@@ -111,7 +111,9 @@ async def run_checkpoint(
 
     view = view_fn()
     active = list(channels)
-    await asyncio.gather(*(ch.present_summary(view) for ch in active))
+    await asyncio.gather(
+        *(ch.present_summary(view) for ch in active), return_exceptions=True
+    )
 
     while True:
         tasks: dict[asyncio.Task, Channel] = {
@@ -157,7 +159,10 @@ async def run_checkpoint(
             if outcome.ok:
                 view = view_fn()
                 await _notify_all(active, f"✏️  {outcome.message}")
-                await asyncio.gather(*(ch.present_summary(view) for ch in active))
+                await asyncio.gather(
+                    *(ch.present_summary(view) for ch in active),
+                    return_exceptions=True,
+                )
             else:
                 await source.notify(f"⚠️  {outcome.message}")
             continue
