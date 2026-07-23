@@ -1,0 +1,28 @@
+[project]
+name = "reels-agent"
+version = "0.1.0"
+description = "Staged multi-agent pipeline: topic -> researched, human-approved Instagram Reel script (Phase 1: Researcher + Strategist/Writer loop)"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.60",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0",
+    "httpx>=0.27",
+    "rich>=13.7",
+    "langsmith>=0.1.120",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]

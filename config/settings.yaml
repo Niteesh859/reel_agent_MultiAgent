@@ -1,0 +1,35 @@
+# Tunable pipeline values (PRD §10). Env keys live in .env, not here.
+
+pipeline:
+  target_length_sec: 45        # default; strategist may pick 30-60
+  tone: "casual, energetic explainer — like a friend hyping you up"
+  platform: "Instagram Reel, vertical 9:16, 30-60 seconds"
+
+loop:
+  min_rounds: 3                # backbone + 2 focused revisions (PRD floor 2-3)
+  max_rounds: 5                # hard cap -> convergence flag "cap_reached"
+
+models:
+  researcher: "deepseek/deepseek-v4-flash"
+  strategist: "deepseek/deepseek-v4-flash"
+  writer: "deepseek/deepseek-v4-flash"
+
+llm:
+  base_url: "https://openrouter.ai/api/v1"
+  max_output_tokens: 8000
+  json_retries: 2              # corrective re-asks when output fails schema validation
+  force_json_mode: true        # send response_format={"type":"json_object"}
+  require_json_capable_provider: true   # OpenRouter: route only to providers honoring response_format
+  temperatures:
+    researcher: 0.3
+    strategist: 0.7
+    writer: 0.8
+
+research:
+  max_facts: 10
+  max_search_queries: 6
+  tavily_max_results: 5
+  search_depth: "basic"        # basic = 1 Tavily credit, advanced = 2
+
+io:
+  telegram_poll_timeout_sec: 25
