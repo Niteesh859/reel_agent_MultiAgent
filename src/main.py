@@ -178,6 +178,17 @@ async def _script_stage(
 
         def on_event(kind: str, payload: dict, _attempt: int = attempt) -> None:
             iteration = payload.get("iteration", 0)
+            if kind == "writer_start":
+                console.log(
+                    f"[dim][loop] round {iteration}: writer drafting… "
+                    f"(20-90s, be patient)[/dim]"
+                )
+                return
+            if kind == "assess_start":
+                console.log(
+                    f"[dim][loop] round {iteration}: strategist reviewing… (~10-30s)[/dim]"
+                )
+                return
             save_json(
                 run_dir / f"loop_attempt{_attempt}_round{iteration}_{kind}.json",
                 payload,

@@ -113,6 +113,7 @@ class ScriptLoopController:
         convergence: str = "cap_reached"
 
         while True:
+            self._emit("writer_start", {"iteration": iteration})
             execution: WriterExecution = await with_retry(
                 self.writer.execute,
                 brief,
@@ -125,6 +126,7 @@ class ScriptLoopController:
                 "execution", {"iteration": iteration, "execution": execution.model_dump()}
             )
 
+            self._emit("assess_start", {"iteration": iteration})
             decision, emphasis = await with_retry(
                 self.strategist.assess,
                 brief,
