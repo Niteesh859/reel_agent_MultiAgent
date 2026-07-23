@@ -147,6 +147,7 @@ class Strategist:
         self.settings = settings
         self.model = settings.models.strategist
         self.temperature = settings.llm.temperatures.get("strategist", 0.7)
+        self.reasoning_effort = settings.llm.reasoning_efforts.get("strategist")
 
     def _system(self) -> str:
         return _SYSTEM.format(tone=self.settings.pipeline.tone)
@@ -204,6 +205,7 @@ class Strategist:
             system=self._system(),
             user="\n".join(parts),
             temperature=self.temperature,
+            reasoning_effort=self.reasoning_effort,
             post_validate=_check,
         )
 
@@ -304,6 +306,7 @@ class Strategist:
             system=self._system(),
             user=user,
             temperature=self.temperature,
+            reasoning_effort=self.reasoning_effort,
             post_validate=_check,
         )
 

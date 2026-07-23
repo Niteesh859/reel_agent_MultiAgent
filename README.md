@@ -116,7 +116,12 @@ The PRD's KPI is **per-step approval rate ≈ 80%** across the two active checkp
      revisions should be **targeted** (only `revised_scene_ids` change materially),
      not full rewrites.
 5. **Tuning levers** (in `config/settings.yaml`): loop `min_rounds`/`max_rounds`,
-   per-agent `temperatures`, `max_facts`, models per agent (swap any OpenRouter slug).
+   per-agent `temperatures`, `max_facts`, models per agent (swap any OpenRouter slug),
+   and per-agent `reasoning_efforts` (`none`…`max` — OpenRouter's unified reasoning
+   control; the strategist ships at `high` so it reflects longer before choosing an
+   angle or calling convergence; add `writer: medium` etc. to extend it). Higher
+   effort = more thinking tokens = slower + slightly costlier calls; the thinking
+   text is visible per-call in LangSmith traces.
    Agent behavior lives in the prompt constants at the top of
    `src/agents/{researcher,strategist,writer}.py`.
 

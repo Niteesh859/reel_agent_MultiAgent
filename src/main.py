@@ -182,7 +182,7 @@ async def _script_stage(
             iteration = payload.get("iteration", 0)
             if kind == "backbone_start":
                 console.log(
-                    "[dim][loop] strategist designing angle + backbone… (~30-90s)[/dim]"
+                    "[dim][loop] strategist designing angle + backbone… (~30-120s)[/dim]"
                 )
                 return
             if kind == "writer_start":
@@ -193,7 +193,7 @@ async def _script_stage(
                 return
             if kind == "assess_start":
                 console.log(
-                    f"[dim][loop] round {iteration}: strategist reviewing… (~10-30s)[/dim]"
+                    f"[dim][loop] round {iteration}: strategist reviewing… (~15-60s)[/dim]"
                 )
                 return
             save_json(

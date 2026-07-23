@@ -21,6 +21,8 @@ llm:
   json_retries: 2              # corrective re-asks when output fails schema validation
   force_json_mode: true        # send response_format={"type":"json_object"}
   require_json_capable_provider: true   # OpenRouter: route only to providers honoring response_format
+  reasoning_efforts:          # per-agent thinking budget: none/minimal/low/medium/high/xhigh/max
+    strategist: high           # deeper reflection on angle choice + convergence calls
   temperatures:
     researcher: 0.3
     strategist: 0.7

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_SETTINGS_PATH = REPO_ROOT / "config" / "settings.yaml"
@@ -41,6 +41,20 @@ class LLMCfg(BaseModel):
     temperatures: dict[str, float] = Field(
         default_factory=lambda: {"researcher": 0.3, "strategist": 0.7, "writer": 0.8}
     )
+    # Per-agent thinking budget (OpenRouter unified `reasoning.effort`). Agents
+    # absent from the dict use the model's default reasoning behavior.
+    reasoning_efforts: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("reasoning_efforts")
+    @classmethod
+    def _valid_efforts(cls, v: dict[str, str]) -> dict[str, str]:
+        allowed = {"none", "minimal", "low", "medium", "high", "xhigh", "max"}
+        for agent, effort in v.items():
+            if effort not in allowed:
+                raise ValueError(
+                    f"reasoning_efforts.{agent}: '{effort}' not in {sorted(allowed)}"
+                )
+        return v
 
 
 class ResearchCfg(BaseModel):

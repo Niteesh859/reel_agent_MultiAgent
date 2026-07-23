@@ -139,6 +139,7 @@ async def run_research(
 ) -> ResearchBrief:
     model = settings.models.researcher
     temperature = settings.llm.temperatures.get("researcher", 0.3)
+    reasoning_effort = settings.llm.reasoning_efforts.get("researcher")
 
     note_block = (
         f"\n\nOPERATOR REGENERATION NOTE — the previous research was rejected; "
@@ -159,6 +160,7 @@ async def run_research(
             f"{note_block}"
         ),
         temperature=temperature,
+        reasoning_effort=reasoning_effort,
     )
     queries = [topic, *plan.queries]
     seen: set[str] = set()
@@ -185,6 +187,7 @@ async def run_research(
             f"SOURCES:\n{_sources_block(sources)}"
         ),
         temperature=temperature,
+        reasoning_effort=reasoning_effort,
         post_validate=_check,
     )
 

@@ -76,6 +76,7 @@ async def complete_json(
     system: str,
     user: str,
     temperature: float = 0.7,
+    reasoning_effort: str | None = None,
     post_validate: Callable[[M], None] | None = None,
 ) -> M:
     """One agent call → validated instance of `schema`.
@@ -97,10 +98,19 @@ async def complete_json(
     ]
 
     kwargs: dict = {}
+    extra_body: dict = {}
     if settings.llm.force_json_mode:
         kwargs["response_format"] = {"type": "json_object"}
         if settings.llm.require_json_capable_provider:
-            kwargs["extra_body"] = {"provider": {"require_parameters": True}}
+            extra_body["provider"] = {"require_parameters": True}
+    if reasoning_effort is not None:
+        # OpenRouter unified reasoning control — on hybrid reasoning models
+        # (e.g. DeepSeek) this scales how many thinking tokens the model spends
+        # before answering. The reasoning rides along in the response (visible
+        # in LangSmith traces) but only message.content is parsed here.
+        extra_body["reasoning"] = {"effort": reasoning_effort}
+    if extra_body:
+        kwargs["extra_body"] = extra_body
 
     last_err: Exception | None = None
     for _attempt in range(settings.llm.json_retries + 1):
