@@ -1,8 +1,12 @@
 """Agent 1 — Researcher (PRD §4).
 
-Topic → broad, angle-agnostic facts. Even when the operator supplies an angle
-hint, research goes broad first; the hint is carried through untouched.
-Search backend: Tavily (basic depth = 1 credit/query).
+Topic → broad, angle-agnostic facts, gathered in two tiers of depth:
+  TIER 1 (broad pass): angle-agnostic queries that map the whole topic.
+  TIER 2 (deep pass): the model reads Tier-1's real results, autonomously picks
+    the ≤3 most promising threads, and chases each with sharper digging queries.
+The two-tier strategy is internal — the output is a flat §5.1 facts[] list,
+ordered most-relevant first. The operator angle hint is carried through untouched.
+Search backend: Tavily (search_depth configurable; advanced = 2 credits/query).
 """
 
 from __future__ import annotations
@@ -22,22 +26,44 @@ from src.tracing import traceable
 TAVILY_URL = "https://api.tavily.com/search"
 UNVERIFIED_PREFIX = "[unverified source — URL not among search results] "
 
-_QUERY_SYSTEM = """You plan web research for a short-form explainer video (Instagram Reel).
-Given a topic, produce diverse, angle-agnostic search queries that together cover:
-core facts and definitions, surprising statistics or records, recent developments,
-common misconceptions, and notable expert findings or studies.
-Stay BROAD: do not narrow toward any single story angle, even if a hint is provided —
-the hint only tells you one area that must not be missed, not the only area to cover."""
+_QUERY_SYSTEM = """You are an investigative journalist scoping a story. You plan web
+research for a short-form explainer video (Instagram Reel).
 
-_BRIEF_SYSTEM = """You are the Researcher in a pipeline that turns topics into short
-Instagram Reels. From the web sources provided, extract the facts a content strategist
-could build a 30-60 second energetic explainer from.
+Work in two tiers of depth:
+- TIER 1 (broad pass): produce diverse, angle-agnostic queries that together cover
+  core facts and definitions, surprising statistics or records, recent developments,
+  common misconceptions, and notable expert findings or studies. Produce at most 6
+  such queries — fewer if the topic is thin.
+- TIER 2 (deep pass): from what Tier 1 surfaces, pick the most promising threads —
+  the leads a journalist would chase past the surface answer — and produce sharper,
+  digging queries for them. Follow your instinct for what's story-worthy; there is no
+  fixed rule for what to pick. At most 3 threads, at most 3 queries deep each, and you
+  may stop a thread early once it's answered.
+
+Stay BROAD in Tier 1: do not narrow toward any single story angle, even if a hint is
+provided — the hint only tells you one area that must not be missed, not the only area
+to cover. Save the narrowing for Tier 2, where depth is the point."""
+
+_BRIEF_SYSTEM = """You are an investigative journalist working a story — the Researcher
+in a pipeline that turns topics into short Instagram Reels. From the web sources
+provided, extract the handful of facts a content strategist could build a 30-60 second
+energetic explainer from.
+
+Chase like a journalist, but write like one too — the opposite discipline. Have strong
+taste in WHAT you surface: favor the counterintuitive number, the detail that overturns
+what people assume, the specific over the generic; a reader could have guessed a weak
+fact without you, while a strong one makes them stop and go "wait, really?". But stay
+completely neutral in HOW you write it up: every claim is plain, concrete, and sober —
+no hype, no selling adjectives, no "mind-blowing". The excitement lives in the fact, not
+your phrasing. You gather and report; you never pitch the story angle — that's the
+editor's call.
 
 Rules:
 - Use ONLY the numbered sources provided. Every fact's source_url must be copied
-  exactly from one of them. One credible source per claim is acceptable.
+  exactly from one of them. One credible source per claim is acceptable. A fact you
+  can't source doesn't run.
 - claim: your own concise restatement of the finding (1-2 sentences, concrete,
-  self-contained). Prefer surprising, visual, specific facts over generic ones.
+  self-contained).
 - source_date: publication date if visible in the source text, else null.
 - followup_question: the natural next question a curious viewer would ask after
   hearing this fact — concrete and specific, usable as a CTA or a future reel topic.
@@ -48,8 +74,17 @@ Rules:
 - Stay angle-agnostic: gather what the material supports, do not pitch a story."""
 
 
-class _QueryPlan(BaseModel):
+class _Tier1Plan(BaseModel):
     queries: list[str] = Field(min_length=2, max_length=10)
+
+
+class _DeepThread(BaseModel):
+    thread: str  # the lead being chased, in a few words
+    queries: list[str] = Field(min_length=1, max_length=6)
+
+
+class _Tier2Plan(BaseModel):
+    threads: list[_DeepThread] = Field(default_factory=list, max_length=6)
 
 
 class _FactLLM(BaseModel):
@@ -93,14 +128,22 @@ async def _tavily_search(
     return response.json().get("results", [])
 
 
-@traceable(name="tavily-search", run_type="tool")
-async def _gather_sources(settings: Settings, queries: list[str]) -> list[dict]:
+async def _run_searches(
+    settings: Settings, queries: list[str]
+) -> tuple[dict[str, dict], list[BaseException]]:
+    """Run every query concurrently; return {url: source} plus any per-query errors.
+
+    Never raises on an empty result — the caller decides when the *combined* pool
+    (across both tiers) is empty enough to fail the stage.
+    """
+    if not queries:
+        return {}, []
     async with httpx.AsyncClient(timeout=30.0) as http:
         batches = await asyncio.gather(
             *(_tavily_search(http, settings, q) for q in queries),
             return_exceptions=True,
         )
-    sources: dict[str, dict] = {}
+    pool: dict[str, dict] = {}
     errors: list[BaseException] = []
     for batch in batches:
         if isinstance(batch, BaseException):
@@ -108,9 +151,9 @@ async def _gather_sources(settings: Settings, queries: list[str]) -> list[dict]:
             continue
         for item in batch:
             url = item.get("url") or ""
-            if not url or url in sources:
+            if not url or url in pool:
                 continue
-            sources[url] = {
+            pool[url] = {
                 "title": item.get("title") or "(untitled)",
                 "url": url,
                 "content": (item.get("content") or "")[
@@ -119,11 +162,31 @@ async def _gather_sources(settings: Settings, queries: list[str]) -> list[dict]:
                 "published_date": item.get("published_date"),
                 "score": item.get("score") or 0.0,
             }
-    if not sources:
-        detail = f" (last error: {errors[-1]})" if errors else ""
-        raise RuntimeError(f"web search returned no usable sources{detail}")
-    ranked = sorted(sources.values(), key=lambda s: s["score"], reverse=True)
-    return ranked[:20]
+    return pool, errors
+
+
+@traceable(name="tavily-broad", run_type="tool")
+async def _search_broad(
+    settings: Settings, queries: list[str]
+) -> tuple[dict[str, dict], list[BaseException]]:
+    return await _run_searches(settings, queries)
+
+
+@traceable(name="tavily-deep", run_type="tool")
+async def _search_deep(
+    settings: Settings, queries: list[str]
+) -> tuple[dict[str, dict], list[BaseException]]:
+    return await _run_searches(settings, queries)
+
+
+def _digest(pool: dict[str, dict], limit: int = 15) -> str:
+    """Compact view of Tier-1 hits to inform Tier-2 thread selection."""
+    ranked = sorted(pool.values(), key=lambda s: s["score"], reverse=True)[:limit]
+    lines = []
+    for i, s in enumerate(ranked, start=1):
+        snippet = " ".join((s["content"] or "").split())[:220]
+        lines.append(f"[{i}] {s['title']} — {snippet}")
+    return "\n".join(lines) or "(no sources found in the broad pass)"
 
 
 def _sources_block(sources: list[dict]) -> str:
@@ -152,29 +215,75 @@ async def run_research(
         if operator_note
         else ""
     )
-    plan = await complete_json(
+
+    # ── TIER 1 — broad pass ────────────────────────────────────────────────
+    tier1 = await complete_json(
         client,
         settings,
         model=model,
-        schema=_QueryPlan,
+        schema=_Tier1Plan,
         system=_QUERY_SYSTEM,
         user=(
             f"Topic: {topic}\n"
             f"Operator angle hint (context only, stay broad): {angle_hint or 'none'}\n"
-            f"Produce up to {settings.research.max_search_queries} search queries."
+            f"TIER 1 — broad pass. Produce up to "
+            f"{settings.research.max_search_queries} diverse, angle-agnostic queries "
+            f"that map the whole topic. Do not narrow yet."
             f"{note_block}"
         ),
         temperature=temperature,
         reasoning_effort=reasoning_effort,
     )
-    queries = [topic, *plan.queries]
-    seen: set[str] = set()
-    queries = [q for q in queries if not (q.lower() in seen or seen.add(q.lower()))]
-    queries = queries[: settings.research.max_search_queries]
+    searched: set[str] = set()
+    broad_queries: list[str] = []
+    for q in [topic, *tier1.queries]:
+        if q.lower() not in searched:
+            searched.add(q.lower())
+            broad_queries.append(q)
+    broad_queries = broad_queries[: settings.research.max_search_queries]
 
-    sources = await _gather_sources(settings, queries)
+    pool, errors = await _search_broad(settings, broad_queries)
+
+    # ── TIER 2 — deep pass, chosen from what Tier 1 actually surfaced ───────
+    tier2 = await complete_json(
+        client,
+        settings,
+        model=model,
+        schema=_Tier2Plan,
+        system=_QUERY_SYSTEM,
+        user=(
+            f"Topic: {topic}\n"
+            f"Operator angle hint (context only): {angle_hint or 'none'}\n\n"
+            f"TIER 1 surfaced these sources:\n{_digest(pool)}\n\n"
+            f"TIER 2 — deep pass. Pick the up to "
+            f"{settings.research.max_deep_threads} most promising threads a "
+            f"journalist would chase past the surface, and for each give up to "
+            f"{settings.research.max_deep_queries_per_thread} sharper, digging "
+            f"queries (specifics, causes, implications). Return fewer threads or "
+            f"queries if the leads are thin.{note_block}"
+        ),
+        temperature=temperature,
+        reasoning_effort=reasoning_effort,
+    )
+    deep_queries: list[str] = []
+    for thread in tier2.threads[: settings.research.max_deep_threads]:
+        for q in thread.queries[: settings.research.max_deep_queries_per_thread]:
+            if q.lower() not in searched:
+                searched.add(q.lower())
+                deep_queries.append(q)
+
+    deep_pool, deep_errors = await _search_deep(settings, deep_queries)
+    errors += deep_errors
+    for url, src in deep_pool.items():
+        pool.setdefault(url, src)
+
+    if not pool:
+        detail = f" (last error: {errors[-1]})" if errors else ""
+        raise RuntimeError(f"web search returned no usable sources{detail}")
+    sources = sorted(pool.values(), key=lambda s: s["score"], reverse=True)[:20]
     known_urls = {_normalize_url(s["url"]) for s in sources}
 
+    # ── SYNTHESIS — flat facts[], two-tier depth invisible in the output ────
     brief_llm = await complete_json(
         client,
         settings,

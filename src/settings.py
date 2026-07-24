@@ -59,7 +59,9 @@ class LLMCfg(BaseModel):
 
 class ResearchCfg(BaseModel):
     max_facts: int = 10
-    max_search_queries: int = 6
+    max_search_queries: int = 6  # Tier 1 broad pass: max angle-agnostic queries
+    max_deep_threads: int = 3  # Tier 2: max promising threads to chase
+    max_deep_queries_per_thread: int = 3  # Tier 2: max digging queries per thread
     tavily_max_results: int = 5
     search_depth: str = "basic"
     chunks_per_source: int = Field(default=3, ge=1, le=3)  # advanced depth only

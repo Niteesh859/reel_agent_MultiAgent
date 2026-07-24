@@ -143,7 +143,9 @@ async def _research_stage(
     attempt = 1
     while True:
         await _notify(
-            channels, f"🔎 researching “{topic}” (attempt {attempt}, ~1-3 min)…"
+            channels,
+            f"🔎 researching “{topic}” — two-tier pass "
+            f"(attempt {attempt}, ~2-5 min)…",
         )
         brief: ResearchBrief = await with_retry(
             run_research, client, settings, topic, angle_hint, note, stage="research"

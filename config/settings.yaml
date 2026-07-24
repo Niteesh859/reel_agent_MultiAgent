@@ -30,7 +30,9 @@ llm:
 
 research:
   max_facts: 10
-  max_search_queries: 6
+  max_search_queries: 6          # Tier 1 broad pass: max angle-agnostic queries
+  max_deep_threads: 3            # Tier 2 deep pass: max threads to chase
+  max_deep_queries_per_thread: 3 # Tier 2: max digging queries per thread
   tavily_max_results: 5
   search_depth: "advanced"     # basic = 1 Tavily credit, advanced = 2 (deeper reranking + chunks)
   chunks_per_source: 3         # advanced only: up to 3 content chunks per URL

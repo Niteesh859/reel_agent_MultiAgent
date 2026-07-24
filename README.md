@@ -9,7 +9,7 @@ render) are Phase 2 and exist only as stubs.
 | | |
 |---|---|
 | LLM | OpenRouter · `deepseek/deepseek-v4-flash` ($0.09/$0.18 per Mtok → **≈ $0.01/reel**) |
-| Web search | Tavily, basic depth (1 credit/query; free tier = 1,000/month → **$0** at 1–2 reels/day) |
+| Web search | Tavily, **advanced** depth, **two-tier** (broad pass → deep pass on the ≤3 most promising threads); ≤15 queries/reel × 2 credits; free tier = 1,000/month |
 | Checkpoints | TUI always · Telegram auto-enables when its keys exist · first answer wins |
 | Observability | LangSmith tracing (opt-in via env) |
 
@@ -117,7 +117,9 @@ The PRD's KPI is **per-step approval rate ≈ 80%** across the two active checkp
      revisions should be **targeted** (only `revised_scene_ids` change materially),
      not full rewrites.
 5. **Tuning levers** (in `config/settings.yaml`): loop `min_rounds`/`max_rounds`,
-   per-agent `temperatures`, `max_facts`, models per agent (swap any OpenRouter slug),
+   per-agent `temperatures`, `max_facts`, research depth (`search_depth`,
+   `max_search_queries` for the broad pass, `max_deep_threads` /
+   `max_deep_queries_per_thread` for the deep pass), models per agent (swap any OpenRouter slug),
    and per-agent `reasoning_efforts` (`none`…`max` — OpenRouter's unified reasoning
    control; the strategist ships at `high` so it reflects longer before choosing an
    angle or calling convergence; add `writer: medium` etc. to extend it). Higher
@@ -144,9 +146,11 @@ decorators; the reel_id/topic appear in the root run's inputs):
 ```
 reel-pipeline
 ├── researcher
-│   ├── ChatCompletion (query planning)
-│   ├── tavily-search
-│   └── ChatCompletion (brief extraction)
+│   ├── ChatCompletion (tier-1 broad query planning)
+│   ├── tavily-broad
+│   ├── ChatCompletion (tier-2 deep thread selection)
+│   ├── tavily-deep
+│   └── ChatCompletion (synthesis → facts)
 └── script-loop
     ├── strategist-backbone → ChatCompletion
     ├── writer-execute      → ChatCompletion     (round 1)
