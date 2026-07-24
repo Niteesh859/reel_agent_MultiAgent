@@ -28,11 +28,9 @@ def make_brief() -> ResearchBrief:
             Fact(
                 fact_id=f"f{i}",
                 claim=f"claim {i}",
-                source_name="Nature",
                 source_url=f"https://example.com/{i}",
                 source_date=None,
-                credibility_note="peer-reviewed",
-                relevance_rank=i,
+                followup_question=f"follow-up {i}?",
             )
             for i in (1, 2, 3)
         ],

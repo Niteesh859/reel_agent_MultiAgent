@@ -38,11 +38,10 @@ Rules:
   exactly from one of them. One credible source per claim is acceptable.
 - claim: your own concise restatement of the finding (1-2 sentences, concrete,
   self-contained). Prefer surprising, visual, specific facts over generic ones.
-- source_name: the publication/site name; source_date: publication date if visible
-  in the source text, else null.
-- credibility_note: your honest judgment of how much to trust this source
-  (e.g. "peer-reviewed journal", "major outlet citing a study", "enthusiast blog").
-- relevance_rank: 1 = most relevant to the topic; each fact gets a distinct rank.
+- source_date: publication date if visible in the source text, else null.
+- followup_question: the natural next question a curious viewer would ask after
+  hearing this fact — concrete and specific, usable as a CTA or a future reel topic.
+- List facts most-relevant first; order is the only ranking signal.
 - research_summary: 2-3 sentences synthesizing what you found overall.
 - topic_level_notes: observations about the topic as a whole that don't attach to a
   single fact (or null).
@@ -55,11 +54,9 @@ class _QueryPlan(BaseModel):
 
 class _FactLLM(BaseModel):
     claim: str
-    source_name: str
     source_url: str
     source_date: str | None = None
-    credibility_note: str
-    relevance_rank: int = Field(ge=1)
+    followup_question: str
 
 
 class _BriefLLM(BaseModel):
@@ -170,11 +167,6 @@ async def run_research(
     sources = await _gather_sources(settings, queries)
     known_urls = {_normalize_url(s["url"]) for s in sources}
 
-    def _check(brief: _BriefLLM) -> None:
-        ranks = [f.relevance_rank for f in brief.facts]
-        if len(set(ranks)) != len(ranks):
-            raise ValueError("relevance_rank values must be distinct across facts")
-
     brief_llm = await complete_json(
         client,
         settings,
@@ -188,24 +180,21 @@ async def run_research(
         ),
         temperature=temperature,
         reasoning_effort=reasoning_effort,
-        post_validate=_check,
     )
 
     facts: list[Fact] = []
-    ordered = sorted(brief_llm.facts, key=lambda f: f.relevance_rank)
-    for i, f in enumerate(ordered[: settings.research.max_facts], start=1):
-        credibility = f.credibility_note
+    # LLM output order is the ranking (most-relevant first, per the system prompt).
+    for i, f in enumerate(brief_llm.facts[: settings.research.max_facts], start=1):
+        claim = f.claim
         if _normalize_url(f.source_url) not in known_urls:
-            credibility = UNVERIFIED_PREFIX + credibility
+            claim = UNVERIFIED_PREFIX + claim
         facts.append(
             Fact(
                 fact_id=f"f{i}",
-                claim=f.claim,
-                source_name=f.source_name,
+                claim=claim,
                 source_url=f.source_url,
                 source_date=f.source_date,
-                credibility_note=credibility,
-                relevance_rank=i,
+                followup_question=f.followup_question,
             )
         )
 

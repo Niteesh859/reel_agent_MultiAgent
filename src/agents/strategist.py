@@ -132,9 +132,12 @@ def brief_block(brief: ResearchBrief) -> str:
     lines.append(f"RESEARCH SUMMARY: {brief.research_summary}")
     if brief.topic_level_notes:
         lines.append(f"TOPIC NOTES: {brief.topic_level_notes}")
-    lines.append("FACTS:")
+    lines.append("FACTS (most relevant first):")
     for f in brief.facts:
-        lines.append(f"- {f.fact_id} (rank {f.relevance_rank}): {f.claim}")
+        line = f"- {f.fact_id}: {f.claim}"
+        if f.followup_question:
+            line += f" (viewer follow-up: {f.followup_question})"
+        lines.append(line)
     return "\n".join(lines)
 
 

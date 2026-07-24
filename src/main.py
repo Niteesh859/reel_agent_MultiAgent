@@ -57,19 +57,19 @@ def research_view(brief: ResearchBrief, reel_id: str) -> CheckpointView:
     header = [f"reel {reel_id} · stage 1/2", f"topic: {brief.topic}"]
     if brief.operator_angle_hint:
         header.append(f"angle hint: {brief.operator_angle_hint}")
-    top = sorted(brief.facts, key=lambda f: f.relevance_rank)
+    facts = brief.facts  # researcher order = most relevant first
     summary = [brief.research_summary, ""]
-    for f in top[:5]:
-        summary.append(f"{f.fact_id} (r{f.relevance_rank}) {f.claim}  — {f.source_name}")
-    if len(top) > 5:
-        summary.append(f"… {len(top) - 5} more facts — type 'full'")
+    for f in facts[:5]:
+        summary.append(f"{f.fact_id} {f.claim}")
+    if len(facts) > 5:
+        summary.append(f"… {len(facts) - 5} more facts — type 'full'")
     full = [f"RESEARCH SUMMARY: {brief.research_summary}", ""]
-    for f in top:
+    for f in facts:
         full += [
-            f"{f.fact_id} (rank {f.relevance_rank}) {f.claim}",
-            f"    source: {f.source_name} · {f.source_url}"
+            f"{f.fact_id} {f.claim}",
+            f"    source: {f.source_url}"
             + (f" · {f.source_date}" if f.source_date else ""),
-            f"    credibility: {f.credibility_note}",
+            f"    follow-up: {f.followup_question or '(none)'}",
             "",
         ]
     if brief.topic_level_notes:

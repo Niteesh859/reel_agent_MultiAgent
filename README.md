@@ -66,8 +66,8 @@ within ~8 minutes. **Don't Ctrl+C while a progress line is showing.**
 | Edit | field-addressed commands below |
 | Help | `help` |
 
-**Research edits** — `edit fact f2 claim: <text>` (also `source`, `url`, `date`,
-`credibility`, `rank`) · `delete fact f3` · `edit summary: <text>` · `edit notes: <text>`
+**Research edits** — `edit fact f2 claim: <text>` (also `url`, `date`, `followup`) ·
+`delete fact f3` · `edit summary: <text>` · `edit notes: <text>`
 
 **Script edits** — `edit scene 3 narration: <text>` (also `text` = on-screen, `visual`,
 `emphasis`, `duration`) · `3: <text>` shorthand for scene 3's narration ·
@@ -106,8 +106,9 @@ The PRD's KPI is **per-step approval rate ≈ 80%** across the two active checkp
 
 4. **What to look for per stage** (a weak stage maps to exactly one agent to fix):
    - *Research:* facts concrete/surprising vs generic? every source URL real (open 2–3
-     spot-checks — facts with `[unverified source]` prefixes are the Researcher
-     hallucinating URLs)? broad coverage even when you gave an angle hint?
+     spot-checks — claims prefixed `[unverified source]` are the Researcher
+     hallucinating URLs)? follow-up questions usable as CTAs/future topics? broad
+     coverage even when you gave an angle hint?
    - *Angle+script:* would the hook stop your scroll in <2s? does `paths_considered`
      show real alternatives or filler? read the narration aloud — does it fit the
      target length (~2.5 words/sec)? `convergence: cap_reached` flags scripts that

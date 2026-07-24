@@ -40,8 +40,8 @@ def test_edit_fact_claim():
 
 def test_edit_fact_loose_phrasing_and_bare_id():
     brief = make_brief()
-    assert apply_research_edit(brief, "change fact 3 credibility to shaky blog").ok
-    assert brief.get_fact("f3").credibility_note == "shaky blog"
+    assert apply_research_edit(brief, "change fact 3 url to https://new.example/x").ok
+    assert brief.get_fact("f3").source_url == "https://new.example/x"
 
 
 def test_delete_fact():
@@ -50,11 +50,12 @@ def test_delete_fact():
     assert brief.fact_ids() == {"f2", "f3"}
 
 
-def test_edit_fact_rank_requires_int():
+def test_edit_fact_followup_question():
     brief = make_brief()
-    assert not apply_research_edit(brief, "edit fact f1 rank: high").ok
-    assert apply_research_edit(brief, "edit fact f1 rank: 3").ok
-    assert brief.get_fact("f1").relevance_rank == 3
+    assert apply_research_edit(brief, "edit fact f1 followup: how does it scale?").ok
+    assert brief.get_fact("f1").followup_question == "how does it scale?"
+    assert apply_research_edit(brief, "change fact 2 follow-up to why now?").ok
+    assert brief.get_fact("f2").followup_question == "why now?"
 
 
 def test_edit_summary_and_unknown_fact():

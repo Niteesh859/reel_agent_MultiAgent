@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class Fact(BaseModel):
     fact_id: str
     claim: str
-    source_name: str
     source_url: str
     source_date: str | None = None
-    credibility_note: str
-    relevance_rank: int = Field(ge=1)
+    followup_question: str | None = None
 
 
 class ResearchBrief(BaseModel):

@@ -67,10 +67,10 @@ def _markdown(script: ConvergedScript, brief: ResearchBrief, spine: str, reel_id
     lines += ["", "## Sources (from the approved research)", ""]
     for f in brief.facts:
         date = f" ({f.source_date})" if f.source_date else ""
-        lines.append(
-            f"- **{f.fact_id}** {f.claim}\n"
-            f"  — {f.source_name}{date} · {f.source_url} · _{f.credibility_note}_"
+        followup = (
+            f"\n  — _follow-up: {f.followup_question}_" if f.followup_question else ""
         )
+        lines.append(f"- **{f.fact_id}** {f.claim}\n  — {f.source_url}{date}{followup}")
     lines += [
         "",
         "---",

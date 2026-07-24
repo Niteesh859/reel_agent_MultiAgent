@@ -17,8 +17,8 @@ _SEP = r"(?:\s*[:=]\s*|\s+to\s+)"
 
 _FACT_EDIT = re.compile(
     rf"^{_VERB}\s+fact\s+(f?\d+)\s+"
-    r"(claim|source_name|source_url|source|url|source_date|date|"
-    r"credibility(?:_note)?|relevance(?:_rank)?|rank)"
+    r"(claim|source_url|source|url|source_date|date|"
+    r"follow[_\- ]?up(?:[_\- ]?question)?|followup(?:[_\- ]?question)?)"
     rf"{_SEP}(.+)$",
     re.IGNORECASE | re.DOTALL,
 )
@@ -49,7 +49,7 @@ _ANGLE_EDIT = re.compile(rf"^{_VERB}\s+angle{_SEP}(.+)$", re.IGNORECASE | re.DOT
 _SHORTHAND = re.compile(r"^(\d+)\s*[:\-]\s*(.+)$", re.DOTALL)
 
 RESEARCH_HELP = """Edit commands (research):
-  edit fact f2 claim: <text>          also: source, url, date, credibility, rank
+  edit fact f2 claim: <text>          also: url, date, followup
   delete fact f3
   edit summary: <text>
   edit notes: <text>"""
@@ -92,19 +92,12 @@ def apply_research_edit(brief: ResearchBrief, command: str) -> EditOutcome:
             return EditOutcome(False, f"no fact '{fid}' — ids: {sorted(brief.fact_ids())}")
         if field_raw == "claim":
             fact.claim = value
-        elif field_raw in {"source_name", "source"}:
-            fact.source_name = value
-        elif field_raw in {"source_url", "url"}:
+        elif field_raw in {"source_url", "source", "url"}:
             fact.source_url = value
         elif field_raw in {"source_date", "date"}:
             fact.source_date = value
-        elif field_raw.startswith("credibility"):
-            fact.credibility_note = value
-        else:  # relevance / rank
-            try:
-                fact.relevance_rank = int(value)
-            except ValueError:
-                return EditOutcome(False, f"rank must be an integer, got '{value}'")
+        else:  # follow-up question
+            fact.followup_question = value
         return EditOutcome(True, f"updated fact {fid} {field_raw}")
 
     if m := _SUMMARY_EDIT.match(command):
