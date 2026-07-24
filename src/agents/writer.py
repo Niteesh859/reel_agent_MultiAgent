@@ -93,7 +93,7 @@ class _RevisionOutLLM(BaseModel):
 def _facts_appendix(brief: ResearchBrief) -> str:
     lines = ["RESEARCH FACTS (referenced by fact_id):"]
     for f in brief.facts:
-        lines.append(f"- {f.fact_id}: {f.claim} [source: {f.source_name}]")
+        lines.append(f"- {f.fact_id}: {f.claim}")
     return "\n".join(lines)
 
 

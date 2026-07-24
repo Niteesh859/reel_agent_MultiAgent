@@ -134,10 +134,7 @@ def brief_block(brief: ResearchBrief) -> str:
         lines.append(f"TOPIC NOTES: {brief.topic_level_notes}")
     lines.append("FACTS:")
     for f in brief.facts:
-        lines.append(
-            f"- {f.fact_id} (rank {f.relevance_rank}): {f.claim} "
-            f"[source: {f.source_name}; credibility: {f.credibility_note}]"
-        )
+        lines.append(f"- {f.fact_id} (rank {f.relevance_rank}): {f.claim}")
     return "\n".join(lines)
 
 
