@@ -62,6 +62,15 @@ class ResearchCfg(BaseModel):
     max_search_queries: int = 6
     tavily_max_results: int = 5
     search_depth: str = "basic"
+    chunks_per_source: int = Field(default=3, ge=1, le=3)  # advanced depth only
+    source_content_chars: int = Field(default=1500, gt=0)
+
+    @field_validator("search_depth")
+    @classmethod
+    def _valid_depth(cls, v: str) -> str:
+        if v not in {"basic", "advanced"}:
+            raise ValueError("search_depth must be 'basic' or 'advanced'")
+        return v
 
 
 class IOCfg(BaseModel):

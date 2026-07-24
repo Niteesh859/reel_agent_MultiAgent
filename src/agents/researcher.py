@@ -81,6 +81,12 @@ async def _tavily_search(
             "search_depth": settings.research.search_depth,
             "max_results": settings.research.tavily_max_results,
             "include_answer": False,
+            # chunks_per_source is honored only on advanced depth; harmless on basic
+            **(
+                {"chunks_per_source": settings.research.chunks_per_source}
+                if settings.research.search_depth == "advanced"
+                else {}
+            ),
         },
     )
     response.raise_for_status()
@@ -107,7 +113,9 @@ async def _gather_sources(settings: Settings, queries: list[str]) -> list[dict]:
             sources[url] = {
                 "title": item.get("title") or "(untitled)",
                 "url": url,
-                "content": (item.get("content") or "")[:1500],
+                "content": (item.get("content") or "")[
+                    : settings.research.source_content_chars
+                ],
                 "published_date": item.get("published_date"),
                 "score": item.get("score") or 0.0,
             }
